@@ -12,14 +12,12 @@ type Student struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// DTO untuk POST (Semua field wajib)
 type CreateStudentRequest struct {
 	NIM   string  `json:"nim"`
 	Name  string  `json:"name"`
 	Grade float64 `json:"grade"`
 }
 
-// DTO untuk PUT (Ganti seluruh isi)
 type ReplaceStudentRequest struct {
 	NIM      string  `json:"nim"`
 	Name     string  `json:"name"`
@@ -27,7 +25,6 @@ type ReplaceStudentRequest struct {
 	IsActive bool    `json:"is_active"`
 }
 
-// DTO untuk PATCH (Ubah sebagian, menggunakan tipe pointer)
 type PatchStudentRequest struct {
 	NIM      *string  `json:"nim,omitempty"`
 	Name     *string  `json:"name,omitempty"`
@@ -35,7 +32,6 @@ type PatchStudentRequest struct {
 	IsActive *bool    `json:"is_active,omitempty"`
 }
 
-// Format respons standar API
 type WebResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
