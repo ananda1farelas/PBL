@@ -77,7 +77,7 @@ func main() {
 
 	api := app.Group("/api/v1")
 
-	// Endpoint Health Check (Sekarang ikut memeriksa koneksi database)
+	// Endpoint Health Check
 	api.Get("/health", func(c *fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
 		defer cancel()
@@ -88,13 +88,13 @@ func main() {
 		return ok(c, "server dan database berjalan", nil)
 	})
 
-	// Endpoint Group Students (Menggunakan Method dari StudentHandler)
+	// Endpoint Group Students (Pemanggilan method handler yang telah disesuaikan)
 	s := api.Group("/students", requireJSON)
 	s.Get("/", studentHandler.List)
-	s.Get("/:id", studentHandler.Get)
+	s.Get("/:id", studentHandler.GetByID)
 	s.Post("/", studentHandler.Create)
-	s.Put("/:id", studentHandler.Replace)
-	s.Patch("/:id", studentHandler.Patch)
+	s.Put("/:id", studentHandler.Update)
+	s.Patch("/:id", studentHandler.Update)
 	s.Delete("/:id", studentHandler.Delete)
 
 	// Fallback Route (Status 404)
@@ -102,7 +102,7 @@ func main() {
 		return fail(c, fiber.StatusNotFound, "endpoint tidak ditemukan")
 	})
 
-	// Port diambil secara dinamis dari file .env[cite: 1]
+	// Port diambil secara dinamis dari file .env
 	port := config.GetEnv("APP_PORT", "3000")
 	log.Printf("Server berjalan di port %s", port)
 	log.Fatal(app.Listen(":" + port))
