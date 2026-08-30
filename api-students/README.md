@@ -66,10 +66,10 @@ Eksekusi query SQL berikut untuk membuat role khusus proyek dan databasenya:
 
 ```sql
 -- 1. Buat role user baru
-CREATE ROLE farelas WITH LOGIN SUPERUSER PASSWORD 'password_kamu_di_sini';
+CREATE ROLE namarole WITH LOGIN SUPERUSER PASSWORD 'password_kamu_di_sini';
 
 -- 2. Buat database baru
-CREATE DATABASE praktikum_backend OWNER farelas;
+CREATE DATABASE praktikum_backend OWNER 'namarole';
 
 -- 3. Keluar dari psql superuser
 \q
@@ -81,7 +81,7 @@ CREATE DATABASE praktikum_backend OWNER farelas;
 Masuk ke direktori proyek (`api-students`), lalu jalankan file migrasi untuk membuat tabel `students`:
 
 ```powershell
-psql -U farelas -d praktikum_backend -f migration/001_create_students.sql
+psql -U 'namarole' -d praktikum_backend -f migration/001_create_students.sql
 
 ```
 
@@ -89,10 +89,10 @@ psql -U farelas -d praktikum_backend -f migration/001_create_students.sql
 
 ### Langkah 4: Seeding Data Awal (5 Data Dummy)
 
-Masuk ke prompt `psql` menggunakan user `farelas`:
+Masuk ke prompt `psql` menggunakan user `namarole`:
 
 ```powershell
-psql -h 127.0.0.1 -U farelas -d praktikum_backend
+psql -h 127.0.0.1 -U 'namarole' -d praktikum_backend
 
 ```
 
