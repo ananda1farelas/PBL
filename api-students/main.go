@@ -88,13 +88,13 @@ func main() {
 		return ok(c, "server dan database berjalan", nil)
 	})
 
-	// Endpoint Group Students (Pemanggilan method handler yang telah disesuaikan)
+	// Endpoint Group Students
 	s := api.Group("/students", requireJSON)
 	s.Get("/", studentHandler.List)
 	s.Get("/:id", studentHandler.GetByID)
 	s.Post("/", studentHandler.Create)
 	s.Put("/:id", studentHandler.Update)
-	s.Patch("/:id", studentHandler.Update)
+	s.Patch("/:id", studentHandler.Patch)
 	s.Delete("/:id", studentHandler.Delete)
 
 	// Fallback Route (Status 404)
