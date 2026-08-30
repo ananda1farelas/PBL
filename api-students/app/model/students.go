@@ -20,12 +20,20 @@ type CreateStudentRequest struct {
 	IsActive *bool   `json:"is_active"`
 }
 
-// Request DTO untuk PUT/PATCH (Update Mahasiswa)
+// Request DTO untuk PUT (Update Mahasiswa)
 type UpdateStudentRequest struct {
 	NIM      string  `json:"nim"`
 	Name     string  `json:"name"`
 	Grade    float64 `json:"grade"`
 	IsActive bool    `json:"is_active"`
+}
+
+// Request DTO untuk Patch
+type PatchStudentRequest struct {
+	NIM      *string  `json:"nim"`
+	Name     *string  `json:"name"`
+	Grade    *float64 `json:"grade"`
+	IsActive *bool    `json:"is_active"`
 }
 
 // WebResponse adalah pembungkus standar response API JSON
