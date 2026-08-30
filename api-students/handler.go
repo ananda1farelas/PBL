@@ -20,7 +20,7 @@ func NewStudentHandler(repo repository.StudentRepository) *StudentHandler {
 	return &StudentHandler{repo: repo}
 }
 
-// GET /api/v1/students - Daftar mahasiswa dengan Paginasi, Search, Sort
+// GET /api/v1/students - Daftar mahasiswa dengan Paginasi, Search, Sort, Filter
 func (h *StudentHandler) List(c *fiber.Ctx) error {
 	limit := c.QueryInt("limit", 10)
 	if limit <= 0 {
@@ -32,12 +32,20 @@ func (h *StudentHandler) List(c *fiber.Ctx) error {
 		page = 1
 	}
 
+	// Penanganan Query Parameter is_active (Pointer Bool)
+	var isActive *bool
+	if c.Query("is_active") != "" {
+		val := c.QueryBool("is_active")
+		isActive = &val
+	}
+
 	q := model.ListQuery{
-		Search: strings.TrimSpace(c.Query("search")),
-		SortBy: strings.ToLower(strings.TrimSpace(c.Query("sort_by", "id"))),
-		Order:  strings.ToLower(strings.TrimSpace(c.Query("order", "asc"))),
-		Limit:  limit,
-		Page:   page,
+		Search:   strings.TrimSpace(c.Query("search")),
+		SortBy:   strings.ToLower(strings.TrimSpace(c.Query("sort_by", "id"))),
+		Order:    strings.ToLower(strings.TrimSpace(c.Query("order", "asc"))),
+		IsActive: isActive,
+		Limit:    limit,
+		Page:     page,
 	}
 
 	students, total, err := h.repo.FindAll(c.Context(), q)
@@ -193,6 +201,46 @@ func (h *StudentHandler) Update(c *fiber.Ctx) error {
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": "gagal memperbarui data mahasiswa",
+			"error":   err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "data mahasiswa berhasil diperbarui",
+		"data":    student,
+	})
+}
+
+func (h *StudentHandler) Patch(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil || id < 1 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "id tidak valid",
+		})
+	}
+
+	// WAJIB: Gunakan model.PatchStudentRequest (Struct dengan Pointer)
+	var req model.PatchStudentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "body JSON tidak valid",
+		})
+	}
+
+	student, err := h.repo.Patch(c.Context(), id, req)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+		if errors.Is(err, repository.ErrDuplicate) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "gagal memperbarui data",
 			"error":   err.Error(),
 		})
 	}
