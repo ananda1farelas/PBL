@@ -56,9 +56,7 @@ func buildFilter(q model.ListQuery) (string, []any) {
 	return where, args
 }
 
-func (r *userPostgresRepository) FindAll(
-	ctx context.Context, q model.ListQuery,
-) ([]model.User, int, error) {
+func (r *userPostgresRepository) FindAll(ctx context.Context, q model.ListQuery) ([]model.User, int, error) {
 	where, args := buildFilter(q)
 
 	var total int
@@ -102,9 +100,7 @@ func (r *userPostgresRepository) FindAll(
 	return hasil, total, nil
 }
 
-func (r *userPostgresRepository) FindByID(
-	ctx context.Context, id int,
-) (model.User, error) {
+func (r *userPostgresRepository) FindByID(ctx context.Context, id int) (model.User, error) {
 	var u model.User
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, username, email, password, is_active, created_at
@@ -120,9 +116,7 @@ func (r *userPostgresRepository) FindByID(
 	return u, nil
 }
 
-func (r *userPostgresRepository) Create(
-	ctx context.Context, u model.User,
-) (model.User, error) {
+func (r *userPostgresRepository) Create(ctx context.Context, u model.User) (model.User, error) {
 	// RETURNING membuat id dan created_at hasil buatan basis data
 	// langsung ikut kembali, tanpa perlu query kedua.
 	err := r.pool.QueryRow(ctx,
@@ -140,15 +134,13 @@ func (r *userPostgresRepository) Create(
 	return u, nil
 }
 
-func (r *userPostgresRepository) Update(
-	ctx context.Context, u model.User,
-) (model.User, error) {
+func (r *userPostgresRepository) Update(ctx context.Context, u model.User) (model.User, error) {
 	// RETURNING mengembalikan baris hasil perubahan dalam satu perjalanan,
 	// sehingga field yang tidak ikut diubah (created_at) tetap terisi benar.
 	err := r.pool.QueryRow(ctx,
 		`UPDATE users SET username = $1, email = $2, is_active = $3
- WHERE id = $4
- RETURNING id, username, email, password, is_active, created_at`,
+		WHERE id = $4
+		RETURNING id, username, email, password, is_active, created_at`,
 		u.Username, u.Email, u.IsActive, u.ID,
 	).Scan(&u.ID, &u.Username, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt)
 	if err != nil {
