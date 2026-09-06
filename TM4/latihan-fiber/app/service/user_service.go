@@ -7,19 +7,15 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"latihan-fiber/app/model"
-	"latihan-fiber/app/repository"
-	"latihan-fiber/helper"
+	"api-students/app/model"
+	"api-students/app/repository"
+	"api-students/helper"
 )
 
-// UserService memegang dua tanggung jawab sekaligus pada struktur baku
-// mata kuliah ini: menerima *fiber.Ctx (peran controller) dan menjalankan
-// business rules (peran use case).
 type UserService struct {
 	repo repository.UserRepository
 }
 
-// NewUserService menerima INTERFACE, bukan struct konkret.
 func NewUserService(repo repository.UserRepository) *UserService {
 	return &UserService{repo: repo}
 }
@@ -32,8 +28,7 @@ func (s *UserService) List(c *fiber.Ctx) error {
 
 	users, total, err := s.repo.FindAll(ctx, q)
 	if err != nil {
-		return helper.Fail(c, fiber.StatusInternalServerError,
-			"gagal mengambil data user")
+		return helper.Fail(c, fiber.StatusInternalServerError, "gagal mengambil data user")
 	}
 
 	return helper.SuccessList(c, "daftar user berhasil diambil", users, &model.Meta{
@@ -67,30 +62,25 @@ func (s *UserService) Create(c *fiber.Ctx) error {
 
 	var req model.CreateUserRequest
 	if err := c.BodyParser(&req); err != nil {
-		return helper.Fail(c, fiber.StatusBadRequest,
-			"body harus berupa JSON yang valid")
+		return helper.Fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
 	}
 
-	req.Username = strings.TrimSpace(req.Username)
+	req.Name = strings.TrimSpace(req.Name)
 	req.Email = strings.TrimSpace(req.Email)
 
-	// Business rulesnya dipanggil, bukan ditulis ulang di sini.
 	if errs := ValidateCreate(req); len(errs) > 0 {
 		return helper.FailValidation(c, errs)
 	}
 
 	newUser, err := s.repo.Create(ctx, model.User{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: req.Password,
-		IsActive: true,
+		Name:  req.Name,
+		Email: req.Email,
 	})
 	if err != nil {
 		return translateError(c, err, "gagal menyimpan user")
 	}
 
-	return helper.Created(c, "user berhasil dibuat", newUser,
-		"/api/v1/users/"+strconv.Itoa(newUser.ID))
+	return helper.Created(c, "user berhasil dibuat", newUser, "/api/v1/users/"+strconv.Itoa(newUser.ID))
 }
 
 func (s *UserService) Replace(c *fiber.Ctx) error {
@@ -104,8 +94,7 @@ func (s *UserService) Replace(c *fiber.Ctx) error {
 
 	var req model.ReplaceUserRequest
 	if err := c.BodyParser(&req); err != nil {
-		return helper.Fail(c, fiber.StatusBadRequest,
-			"body harus berupa JSON yang valid")
+		return helper.Fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
 	}
 
 	if errs := ValidateReplace(req); len(errs) > 0 {
@@ -113,10 +102,9 @@ func (s *UserService) Replace(c *fiber.Ctx) error {
 	}
 
 	result, err := s.repo.Update(ctx, model.User{
-		ID:       id,
-		Username: strings.TrimSpace(req.Username),
-		Email:    strings.TrimSpace(req.Email),
-		IsActive: req.IsActive,
+		ID:    id,
+		Name:  strings.TrimSpace(req.Name),
+		Email: strings.TrimSpace(req.Email),
 	})
 	if err != nil {
 		return translateError(c, err, "gagal memperbarui user")
@@ -133,10 +121,10 @@ func (s *UserService) Patch(c *fiber.Ctx) error {
 	if !valid {
 		return helper.Fail(c, fiber.StatusBadRequest, "id harus berupa angka positif")
 	}
+
 	var req model.PatchUserRequest
 	if err := c.BodyParser(&req); err != nil {
-		return helper.Fail(c, fiber.StatusBadRequest,
-			"body harus berupa JSON yang valid")
+		return helper.Fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
 	}
 
 	if IsEmptyPatch(req) {
@@ -177,13 +165,12 @@ func (s *UserService) Delete(c *fiber.Ctx) error {
 	return helper.NoContent(c)
 }
 
-// translateError memetakan error milik repository menjadi status HTTP.
 func translateError(c *fiber.Ctx, err error, generalMessage string) error {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		return helper.Fail(c, fiber.StatusNotFound, "user tidak ditemukan")
 	case errors.Is(err, repository.ErrDuplicate):
-		return helper.Fail(c, fiber.StatusConflict, "username sudah dipakai")
+		return helper.Fail(c, fiber.StatusConflict, "email sudah dipakai")
 	default:
 		return helper.Fail(c, fiber.StatusInternalServerError, generalMessage)
 	}
