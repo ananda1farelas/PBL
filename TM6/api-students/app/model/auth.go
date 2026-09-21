@@ -24,3 +24,9 @@ type UserResponse struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
 }
+
+type AuthUser struct {
+	ID       int
+	Username string
+	Role     string
+}

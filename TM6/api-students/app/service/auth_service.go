@@ -76,7 +76,11 @@ func (s *authService) Login(ctx context.Context, req model.LoginRequest) (model.
 	}
 
 	// Generate Access Token
-	accessToken, err := s.jwtManager.GenerateAccessToken(user.Username, user.Role)
+	accessToken, err := s.jwtManager.GenerateAccessToken(
+		user.ID,
+		user.Username,
+		user.Role,
+	)
 	if err != nil {
 		return model.TokenPairResponse{}, err
 	}
@@ -87,7 +91,7 @@ func (s *authService) Login(ctx context.Context, req model.LoginRequest) (model.
 	expiresAt := time.Now().Add(s.refreshTTL)
 
 	// Simpan hash refresh token ke database
-	if err := s.tokenRepo.Save(ctx, user.Username, tokenHash, expiresAt); err != nil {
+	if err := s.tokenRepo.Save(ctx, user.ID, tokenHash, expiresAt); err != nil {
 		return model.TokenPairResponse{}, err
 	}
 
@@ -101,7 +105,7 @@ func (s *authService) Refresh(ctx context.Context, refreshTokenStr string) (mode
 	tokenHash := s.hashToken(refreshTokenStr)
 
 	// Cari dan validasi refresh token di DB
-	username, err := s.tokenRepo.FindByHash(ctx, tokenHash)
+	studentID, err := s.tokenRepo.FindByHash(ctx, tokenHash)
 	if err != nil {
 		return model.TokenPairResponse{}, errors.New("refresh token tidak valid atau sudah kedaluwarsa")
 	}
@@ -110,13 +114,17 @@ func (s *authService) Refresh(ctx context.Context, refreshTokenStr string) (mode
 	_ = s.tokenRepo.DeleteByHash(ctx, tokenHash)
 
 	// Ambil data user untuk role terbaru
-	user, err := s.userRepo.FindByUsername(ctx, username)
+	user, err := s.userRepo.FindByID(ctx, studentID)
 	if err != nil {
 		return model.TokenPairResponse{}, errors.New("user tidak ditemukan")
 	}
 
 	// Buat token pair baru
-	accessToken, err := s.jwtManager.GenerateAccessToken(user.Username, user.Role)
+	accessToken, err := s.jwtManager.GenerateAccessToken(
+		user.ID,
+		user.Username,
+		user.Role,
+	)
 	if err != nil {
 		return model.TokenPairResponse{}, err
 	}
@@ -125,7 +133,7 @@ func (s *authService) Refresh(ctx context.Context, refreshTokenStr string) (mode
 	newHash := s.hashToken(newRawRefresh)
 	expiresAt := time.Now().Add(s.refreshTTL)
 
-	if err := s.tokenRepo.Save(ctx, user.Username, newHash, expiresAt); err != nil {
+	if err := s.tokenRepo.Save(ctx, user.ID, newHash, expiresAt); err != nil {
 		return model.TokenPairResponse{}, err
 	}
 

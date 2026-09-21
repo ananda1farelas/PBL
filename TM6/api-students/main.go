@@ -5,32 +5,34 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"api-students/app/handler"
 	"api-students/app/repository"
 	"api-students/app/service"
 	"api-students/config"
+	"api-students/database"
+	"api-students/helper"
 )
 
 func main() {
 	cfg := config.LoadConfig()
 
-	// Inisialisasi Koneksi Database MySQL
-	dsn := "postgres://farelas:farelas355@127.0.0.1:5432/praktikum_backend"
-	db, err := pgxpool.New(context.Background(), dsn)
+	// Inisialisasi Koneksi Database PostgreSQL
+	db, err := database.NewPool(context.Background())
 	if err != nil {
-		log.Fatalf("Gagal membuat koneksi database: %v", err)
+		log.Fatalf("Gagal terhubung ke database: %v", err)
 	}
 	defer db.Close()
-
-	if err := db.Ping(context.Background()); err != nil {
-		log.Fatalf("Gagal ping database: %v", err)
-	}
 
 	studentRepo := repository.NewStudentRepository(db)
 	studentService := service.NewStudentService(studentRepo)
 
-	app := config.NewApp(studentService)
+	userRepo := repository.NewUserRepository(db)
+	tokenRepo := repository.NewTokenRepository(db)
+	jwtManager := helper.NewJWTManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTTL)
+	authService := service.NewAuthService(userRepo, tokenRepo, jwtManager, cfg.RefreshTTL)
+	authHandler := handler.NewAuthHandler(authService)
+
+	app := config.NewApp(studentService, authHandler, jwtManager)
 
 	addr := fmt.Sprintf(":%s", cfg.AppPort)
 	log.Printf("Server berjalan di port %s", addr)

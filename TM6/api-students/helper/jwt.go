@@ -11,6 +11,7 @@ import (
 const LocalsAuthUser = "authUser"
 
 type AuthClaims struct {
+	ID       int    `json:"id"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
 	jwt.RegisteredClaims
@@ -30,8 +31,9 @@ func NewJWTManager(secretKey string, issuer string, accessTTL time.Duration) *JW
 	}
 }
 
-func (j *JWTManager) GenerateAccessToken(username string, role string) (string, error) {
+func (j *JWTManager) GenerateAccessToken(id int, username string, role string) (string, error) {
 	claims := AuthClaims{
+		ID:       id,
 		Username: username,
 		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -42,6 +44,7 @@ func (j *JWTManager) GenerateAccessToken(username string, role string) (string, 
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	signedToken, err := token.SignedString([]byte(j.secretKey))
 	if err != nil {
 		return "", fmt.Errorf("gagal menandatangani token: %w", err)

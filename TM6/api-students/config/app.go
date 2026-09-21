@@ -3,11 +3,13 @@ package config
 import (
 	"github.com/gofiber/fiber/v2"
 
+	"api-students/app/handler"
 	"api-students/app/service"
+	"api-students/helper"
 	"api-students/route"
 )
 
-func NewApp(studentService *service.StudentService) *fiber.App {
+func NewApp(studentService *service.StudentService, authHandler *handler.AuthHandler, jwtManager *helper.JWTManager) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
@@ -23,7 +25,7 @@ func NewApp(studentService *service.StudentService) *fiber.App {
 
 	app.Use(LoggerMiddleware())
 
-	route.RegisterRoutes(app, studentService)
+	route.RegisterRoutes(app, studentService, authHandler, jwtManager)
 
 	return app
 }

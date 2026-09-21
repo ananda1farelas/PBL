@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"api-students/app/model"
+	"api-students/helper"
 )
 
 func RequireJSON(c *fiber.Ctx) error {
@@ -20,4 +21,28 @@ func RequireJSON(c *fiber.Ctx) error {
 		}
 	}
 	return c.Next()
+}
+
+func JWTAuth(manager *helper.JWTManager) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		authHeader := c.Get("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			return c.Status(fiber.StatusUnauthorized).JSON(model.WebResponse{
+				Success: false,
+				Message: "token akses tidak ditemukan",
+			})
+		}
+
+		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		claims, err := manager.Parse(tokenString)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(model.WebResponse{
+				Success: false,
+				Message: "token akses tidak valid atau kedaluwarsa",
+			})
+		}
+
+		c.Locals(helper.LocalsAuthUser, claims)
+		return c.Next()
+	}
 }
