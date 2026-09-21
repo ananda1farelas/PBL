@@ -65,8 +65,10 @@ func (s *StudentService) Create(c *fiber.Ctx) error {
 	}
 
 	student := model.Student{
-		NIM:   req.NIM,
-		Name:  req.Name,
+		NIM:      req.NIM,
+		Name:     req.Name,
+		Grade:    req.Grade,
+		IsActive: req.IsActive,
 	}
 
 	created, err := s.repo.Create(c.Context(), student)
@@ -96,9 +98,11 @@ func (s *StudentService) Replace(c *fiber.Ctx) error {
 	}
 
 	student := model.Student{
-		ID:    id,
-		NIM:   req.NIM,
-		Name:  req.Name,
+		ID:       id,
+		NIM:      req.NIM,
+		Name:     req.Name,
+		Grade:    req.Grade,
+		IsActive: req.IsActive,
 	}
 
 	updated, err := s.repo.Update(c.Context(), student)

@@ -11,6 +11,7 @@ func TestValidateCreateStudent(t *testing.T) {
 		req := model.CreateStudentRequest{
 			NIM:   "18221001",
 			Name:  "Budi Santoso",
+			Grade: "85",
 		}
 		errs := ValidateCreateStudent(req)
 		if len(errs) != 0 {
@@ -35,6 +36,7 @@ func TestValidateReplaceStudent(t *testing.T) {
 		req := model.ReplaceStudentRequest{
 			NIM:   "18221001",
 			Name:  "",
+			Grade: "85",
 		}
 		errs := ValidateReplaceStudent(req)
 		if len(errs) != 1 || errs["name"] == "" {
