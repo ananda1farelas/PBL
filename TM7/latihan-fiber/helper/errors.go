@@ -47,6 +47,7 @@ func (e *AppError) Error() string {
 // Unwrap membuat errors.Is dan errors.As tetap dapat menembus AppError
 // untuk menemukan error asli di bawahnya.
 func (e *AppError) Unwrap() error { return e.cause }
+func (e *AppError) Cause() error  { return e.cause }
 
 func BadRequest(message string) *AppError {
 	return &AppError{Status: fiber.StatusBadRequest, Code: CodeBadRequest, Message: message}
@@ -82,10 +83,11 @@ func ServiceUnavailable(message string) *AppError {
 
 func Validation(fields map[string]string) *AppError {
 	return &AppError{
-		Status: fiber.StatusBadRequest, Code: CodeValidation,
+		Status: fiber.StatusUnprocessableEntity, Code: CodeValidation,
 		Message: "validasi gagal", Fields: fields,
 	}
 }
+
 func NotAcceptable(message string) *AppError {
 	return &AppError{
 		Status: fiber.StatusNotAcceptable, Code: CodeNotAcceptable, Message: message,
