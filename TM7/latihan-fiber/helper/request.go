@@ -60,3 +60,16 @@ func ParseListQuery(c *fiber.Ctx) model.ListQuery {
 
 	return q
 }
+
+func RequestID(c *fiber.Ctx) string {
+	if c == nil {
+		return ""
+	}
+
+	if id, ok := c.Locals("requestid").(string); ok && id != "" {
+		return id
+	}
+
+	return c.Get("X-Request-ID")
+
+}

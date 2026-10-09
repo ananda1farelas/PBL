@@ -2,6 +2,7 @@ package helper
 
 import (
 	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -11,17 +12,16 @@ import (
 // Code TIDAK boleh berubah — ia bagian dari kontrak API, karena client
 // menuliskan percabangan berdasarkan nilainya.
 const (
-	CodeValidation         = "VALIDATION_ERROR"
-	CodeBadRequest         = "BAD_REQUEST"
-	CodeUnauthorized       = "UNAUTHORIZED"
-	CodeForbidden          = "FORBIDDEN"
-	CodeNotFound           = "NOT_FOUND"
-	CodeConflict           = "CONFLICT"
-	CodeUnsupportedMedia   = "UNSUPPORTED_MEDIA_TYPE"
-	CodeNotAcceptable      = "NOT_ACCEPTABLE"
-	CodeTooManyRequests    = "TOO_MANY_REQUESTS"
-	CodeInternal           = "INTERNAL_ERROR"
-	CodeServiceUnavailable = "SERVICE_UNAVAILABLE"
+	CodeValidation       = "VALIDATION_ERROR"
+	CodeBadRequest       = "BAD_REQUEST"
+	CodeUnauthorized     = "UNAUTHORIZED"
+	CodeForbidden        = "FORBIDDEN"
+	CodeNotFound         = "NOT_FOUND"
+	CodeConflict         = "CONFLICT"
+	CodeUnsupportedMedia = "UNSUPPORTED_MEDIA_TYPE"
+	CodeNotAcceptable    = "NOT_ACCEPTABLE"
+	CodeTooManyRequests  = "TOO_MANY_REQUESTS"
+	CodeInternal         = "INTERNAL_ERROR"
 )
 
 // AppError adalah satu-satunya bentuk kegagalan yang dikenal aplikasi ini.
@@ -47,7 +47,6 @@ func (e *AppError) Error() string {
 // Unwrap membuat errors.Is dan errors.As tetap dapat menembus AppError
 // untuk menemukan error asli di bawahnya.
 func (e *AppError) Unwrap() error { return e.cause }
-func (e *AppError) Cause() error  { return e.cause }
 
 func BadRequest(message string) *AppError {
 	return &AppError{Status: fiber.StatusBadRequest, Code: CodeBadRequest, Message: message}
@@ -69,22 +68,12 @@ func Conflict(message string) *AppError {
 	return &AppError{Status: fiber.StatusConflict, Code: CodeConflict, Message: message}
 }
 
-func UnsupportedMediaType(message string) *AppError {
-	return &AppError{Status: fiber.StatusUnsupportedMediaType, Code: CodeUnsupportedMedia, Message: message}
-}
-
-func TooManyRequests(message string) *AppError {
-	return &AppError{Status: fiber.StatusTooManyRequests, Code: CodeTooManyRequests, Message: message}
-}
-
-func ServiceUnavailable(message string) *AppError {
-	return &AppError{Status: fiber.StatusServiceUnavailable, Code: CodeServiceUnavailable, Message: message}
-}
-
 func Validation(fields map[string]string) *AppError {
 	return &AppError{
-		Status: fiber.StatusUnprocessableEntity, Code: CodeValidation,
-		Message: "validasi gagal", Fields: fields,
+		Status:  fiber.StatusUnprocessableEntity,
+		Code:    CodeValidation,
+		Message: "validasi gagal",
+		Fields:  fields,
 	}
 }
 
@@ -101,5 +90,13 @@ func Internal(cause error) *AppError {
 	return &AppError{
 		Status: fiber.StatusInternalServerError, Code: CodeInternal,
 		Message: "terjadi kesalahan pada server", cause: cause,
+	}
+}
+
+func UnsupportedMediaType(message string) *AppError {
+	return &AppError{
+		Status:  fiber.StatusUnsupportedMediaType,
+		Code:    CodeUnsupportedMedia,
+		Message: message,
 	}
 }
