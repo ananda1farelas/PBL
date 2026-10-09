@@ -35,7 +35,7 @@ func (s *UserService) List(c *fiber.Ctx) error {
 
 	users, err := s.repo.List(ctx)
 	if err != nil {
-		return helper.Internal(errors.New("gagal mengambil data user"))
+		return helper.Internal(err)
 	}
 
 	return helper.Success(
@@ -67,8 +67,8 @@ func (s *UserService) Create(c *fiber.Ctx) error {
 		return helper.BadRequest("body harus berupa JSON yang valid")
 	}
 
-	if err := ValidateCreate(req); err != nil {
-		return helper.BadRequest("input tidak valid")
+	if errs := ValidateCreate(req); len(errs) > 0 {
+		return helper.Validation(errs)
 	}
 
 	u := model.User{
@@ -81,7 +81,10 @@ func (s *UserService) Create(c *fiber.Ctx) error {
 
 	user, err := s.repo.Create(ctx, u)
 	if err != nil {
-		return translateError(err, "user")
+		return translateError(
+			err,
+			"gagal membuat user",
+		)
 	}
 
 	return helper.Success(
@@ -118,7 +121,10 @@ func (s *UserService) Replace(c *fiber.Ctx) error {
 
 	user, err := s.repo.Update(ctx, id, u)
 	if err != nil {
-		return translateError(err, "user")
+		return translateError(
+			err,
+			"gagal memperbarui user",
+		)
 	}
 
 	return helper.Success(
@@ -148,17 +154,17 @@ func (s *UserService) Patch(c *fiber.Ctx) error {
 
 	current, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return translateError(err, "user")
+		return translateError(err, "gagal mengambil data user")
 	}
 
 	updated, errs := ApplyPatch(current, req)
 	if len(errs) > 0 {
-		return helper.FailValidation(c, errs)
+		return helper.Validation(errs)
 	}
 
 	user, err := s.repo.Update(ctx, id, updated)
 	if err != nil {
-		return translateError(err, "user")
+		return translateError(err, "gagal memperbarui user")
 	}
 
 	return helper.Success(
@@ -185,16 +191,25 @@ func (s *UserService) Get(c *fiber.Ctx) error {
 		return helper.BadRequest("id harus berupa angka positif")
 	}
 
+	// Pemeriksaan hak akses dilakukan sebelum data diambil.
 	if !CanAccessUser(current, id, s.perms, "user:read:any") {
 		return helper.Forbidden("tidak berhak mengakses data user lain")
 	}
 
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return translateError(err, "user")
+		return translateError(
+			err,
+			"gagal mengambil data user",
+		)
 	}
 
-	return helper.Success(c, fiber.StatusOK, "user ditemukan", user)
+	return helper.Success(
+		c,
+		fiber.StatusOK,
+		"user ditemukan",
+		user,
+	)
 }
 
 // ---------- PATCH /users/:id/role ----------
@@ -220,22 +235,13 @@ func (s *UserService) AssignRole(c *fiber.Ctx) error {
 		return helper.BadRequest("body harus berupa JSON yang valid")
 	}
 
-	if errs := ValidateAssignRole(
-		current,
-		id,
-		req,
-		s.perms,
-	); len(errs) > 0 {
-		return helper.FailValidation(c, errs)
+	if errs := ValidateAssignRole(current, id, req, s.perms); len(errs) > 0 {
+		return helper.Validation(errs)
 	}
 
-	result, err := s.repo.UpdateRole(
-		ctx,
-		id,
-		strings.TrimSpace(req.Role),
-	)
+	result, err := s.repo.UpdateRole(ctx, id, strings.TrimSpace(req.Role))
 	if err != nil {
-		return translateError(err, "user")
+		return translateError(err, "gagal mengubah role user")
 	}
 
 	return helper.Success(
@@ -269,24 +275,20 @@ func (s *UserService) Delete(c *fiber.Ctx) error {
 	}
 
 	if err := s.repo.Delete(ctx, id); err != nil {
-		return translateError(err, "user")
+		return translateError(err, "gagal menghapus user")
 	}
 
 	return helper.NoContent(c)
 }
 
-// ---------- HELPER ----------
-
-// translateError mengubah error milik repository menjadi AppError.
-// Tidak menerima *fiber.Ctx karena fungsi ini murni menerjemahkan jenis error
-// agar dapat ditangani oleh error handler middleware.
-func translateError(err error, entity string) error {
-	switch {
-	case errors.Is(err, repository.ErrNotFound):
-		return helper.NotFound(entity + " tidak ditemukan")
-	case errors.Is(err, repository.ErrDuplicate):
-		return helper.Conflict(entity + " sudah ada")
-	default:
-		return helper.Internal(errors.New("terjadi kesalahan pada server"))
+func translateError(err error, message string) error {
+	if errors.Is(err, repository.ErrNotFound) {
+		return helper.NotFound("data tidak ditemukan")
 	}
+
+	if errors.Is(err, repository.ErrDuplicate) {
+		return helper.Conflict("data sudah ada")
+	}
+
+	return helper.Internal(errors.New(message + ": " + err.Error()))
 }
