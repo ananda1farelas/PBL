@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -30,18 +31,29 @@ func RequestLogger(logger *slog.Logger) fiber.Handler {
 
 		requestID, _ := c.Locals("requestid").(string)
 
+		// Status response mungkin belum diisi oleh ErrorHandler
+		// ketika c.Next() mengembalikan error.
+		status := c.Response().StatusCode()
+
+		if err != nil {
+			var appErr *helper.AppError
+			if errors.As(err, &appErr) {
+				status = appErr.Status
+			} else {
+				status = fiber.StatusInternalServerError
+			}
+		}
+
 		attrs := []any{
 			slog.String("request_id", requestID),
 			slog.String("method", c.Method()),
 			slog.String("path", c.Path()),
-			slog.Int("status", c.Response().StatusCode()),
+			slog.Int("status", status),
 			slog.Duration("duration", time.Since(start)),
 			slog.String("ip", c.IP()),
 		}
 
 		// Identitas ikut dicatat bila request sudah melewati RequireAuth.
-		// Tanpa ini, log sebuah 403 tidak berguna: kita tahu ada yang ditolak,
-		// tetapi tidak tahu siapa dan mengapa.
 		if user, ok := helper.CurrentUser(c); ok {
 			attrs = append(
 				attrs,
@@ -68,16 +80,40 @@ func RequireJSON(c *fiber.Ctx) error {
 	if methodsWithBody[c.Method()] {
 		contentType := c.Get("Content-Type")
 
-		if !strings.HasPrefix(contentType, fiber.MIMEApplicationJSON) {
-			return helper.Fail(
-				c,
-				fiber.StatusUnsupportedMediaType,
+		if !strings.HasPrefix(
+			strings.ToLower(contentType),
+			fiber.MIMEApplicationJSON,
+		) {
+			return helper.UnsupportedMediaType(
 				"Content-Type harus application/json",
 			)
 		}
 	}
 
 	return c.Next()
+}
+
+func RequireJSONAccept(c *fiber.Ctx) error {
+	accept := strings.TrimSpace(c.Get("Accept"))
+
+	// Header Accept kosong berarti klien tidak membatasi format.
+	if accept == "" || accept == "*/*" {
+		return c.Next()
+	}
+
+	// Terima JSON dan wildcard tipe media yang mencakup JSON.
+	for _, mediaType := range strings.Split(accept, ",") {
+		mediaType = strings.TrimSpace(strings.SplitN(mediaType, ";", 2)[0])
+
+		if mediaType == fiber.MIMEApplicationJSON ||
+			mediaType == "application/*" {
+			return c.Next()
+		}
+	}
+
+	return helper.NotAcceptable(
+		"format respons yang diminta tidak didukung",
+	)
 }
 
 // ---------- LOGIN RATE LIMITER ----------
