@@ -16,7 +16,7 @@ func main() {
 	cfg := config.LoadConfig()
 
 	// Inisialisasi Koneksi Database MySQL
-	dsn := "postgres://postgres:postgres@127.0.0.1:5432/db_students"
+	dsn := "postgres://farelas:farelas355@127.0.0.1:5432/praktikum_backend"
 	db, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		log.Fatalf("Gagal membuat koneksi database: %v", err)

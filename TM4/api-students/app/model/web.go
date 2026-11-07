@@ -8,11 +8,12 @@ type WebResponse struct {
 	Errors  map[string]string `json:"errors,omitempty"`
 }
 
+// Meta menyimpan informasi pagination
 type Meta struct {
 	Page       int `json:"page"`
 	Limit      int `json:"limit"`
 	Total      int `json:"total"`
-	TotalPages int `json:"totalPages"`
+	TotalPages int `json:"total_pages"`
 }
 
 type ListQuery struct {
@@ -20,6 +21,14 @@ type ListQuery struct {
 	Limit    int
 	Search   string
 	Sort     string
+	SortBy   string
 	Order    string
 	IsActive *bool
+}
+
+func (q ListQuery) Offset() int {
+	if q.Page <= 1 {
+		return 0
+	}
+	return (q.Page - 1) * q.Limit
 }

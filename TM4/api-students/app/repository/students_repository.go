@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	ErrNotFound  = errors.New("data mahasiswa tidak ditemukan")
-	ErrDuplicate = errors.New("NIM atau email sudah terdaftar")
+	ErrNotFound  = errors.New("data not found")
+	ErrDuplicate = errors.New("duplicate data")
 )
 
 type StudentRepository interface {
@@ -39,12 +39,6 @@ func (r *studentRepository) FindAll(ctx context.Context, q model.ListQuery) ([]m
 	var args []any
 	argID := 1
 
-	if q.Search != "" {
-		conditions = append(conditions, fmt.Sprintf("(nim ILIKE $%d OR name ILIKE $%d OR email ILIKE $%d)", argID, argID, argID))
-		args = append(args, "%"+q.Search+"%")
-		argID++
-	}
-
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
@@ -58,7 +52,7 @@ func (r *studentRepository) FindAll(ctx context.Context, q model.ListQuery) ([]m
 
 	offset := (q.Page - 1) * q.Limit
 	query := fmt.Sprintf(
-		"SELECT id, nim, name, email FROM students %s ORDER BY %s %s LIMIT $%d OFFSET $%d",
+		"SELECT id, nim, name, grade, is_active FROM students %s ORDER BY %s %s LIMIT $%d OFFSET $%d",
 		whereClause, q.Sort, q.Order, argID, argID+1,
 	)
 	args = append(args, q.Limit, offset)
@@ -72,7 +66,7 @@ func (r *studentRepository) FindAll(ctx context.Context, q model.ListQuery) ([]m
 	var students []model.Student
 	for rows.Next() {
 		var s model.Student
-		if err := rows.Scan(&s.ID, &s.NIM, &s.Name, &s.Email); err != nil {
+		if err := rows.Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive); err != nil {
 			return nil, 0, err
 		}
 		students = append(students, s)
@@ -83,8 +77,8 @@ func (r *studentRepository) FindAll(ctx context.Context, q model.ListQuery) ([]m
 
 func (r *studentRepository) FindByID(ctx context.Context, id int) (model.Student, error) {
 	var s model.Student
-	query := "SELECT id, nim, name, email FROM students WHERE id = $1"
-	err := r.pool.QueryRow(ctx, query, id).Scan(&s.ID, &s.NIM, &s.Name, &s.Email)
+	query := "SELECT id, nim, name, grade, is_active, created_at FROM students WHERE id = $1"
+	err := r.pool.QueryRow(ctx, query, id).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
 	}
@@ -92,8 +86,8 @@ func (r *studentRepository) FindByID(ctx context.Context, id int) (model.Student
 }
 
 func (r *studentRepository) Create(ctx context.Context, s model.Student) (model.Student, error) {
-	query := "INSERT INTO students (nim, name, email) VALUES ($1, $2, $3) RETURNING id"
-	err := r.pool.QueryRow(ctx, query, s.NIM, s.Name, s.Email).Scan(&s.ID)
+	query := "INSERT INTO students (nim, name, grade, is_active, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING id"
+	err := r.pool.QueryRow(ctx, query, s.NIM, s.Name, s.Grade, s.IsActive).Scan(&s.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -105,8 +99,8 @@ func (r *studentRepository) Create(ctx context.Context, s model.Student) (model.
 }
 
 func (r *studentRepository) Update(ctx context.Context, s model.Student) (model.Student, error) {
-	query := "UPDATE students SET nim = $1, name = $2, email = $3 WHERE id = $4 RETURNING id, nim, name, email"
-	err := r.pool.QueryRow(ctx, query, s.NIM, s.Name, s.Email, s.ID).Scan(&s.ID, &s.NIM, &s.Name, &s.Email)
+	query := "UPDATE students SET nim = $1, name = $2, grade = $3, is_active = $4 WHERE id = $5 RETURNING id, nim, name, grade, is_active, created_at"
+	err := r.pool.QueryRow(ctx, query, s.NIM, s.Name, s.Grade, s.IsActive, s.ID).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
 	}

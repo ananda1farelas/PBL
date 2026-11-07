@@ -16,8 +16,8 @@ func ValidateCreateStudent(req model.CreateStudentRequest) map[string]string {
 	if strings.TrimSpace(req.Name) == "" {
 		errs["name"] = "nama wajib diisi"
 	}
-	if strings.TrimSpace(req.Email) == "" {
-		errs["email"] = "email wajib diisi"
+	if strings.TrimSpace(req.Grade) == "" {
+		errs["grade"] = "grade wajib diisi"
 	}
 
 	return errs
@@ -33,10 +33,9 @@ func ValidateReplaceStudent(req model.ReplaceStudentRequest) map[string]string {
 	if strings.TrimSpace(req.Name) == "" {
 		errs["name"] = "nama wajib diisi"
 	}
-	if strings.TrimSpace(req.Email) == "" {
-		errs["email"] = "email wajib diisi"
+	if strings.TrimSpace(req.Grade) == "" {
+		errs["grade"] = "grade wajib diisi"
 	}
-
 	return errs
 }
 
@@ -63,13 +62,17 @@ func ApplyPatchStudent(current model.Student, req model.PatchStudentRequest) (mo
 		}
 	}
 
-	if req.Email != nil {
-		val := strings.TrimSpace(*req.Email)
+	if req.Grade != nil {
+		val := strings.TrimSpace(*req.Grade)
 		if val == "" {
-			errs["email"] = "email tidak boleh kosong"
+			errs["grade"] = "grade tidak boleh kosong"
 		} else {
-			updated.Email = val
+			updated.Grade = val
 		}
+	}
+
+	if req.IsActive != nil {
+		updated.IsActive = *req.IsActive
 	}
 
 	return updated, errs
