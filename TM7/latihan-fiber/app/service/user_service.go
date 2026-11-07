@@ -33,17 +33,35 @@ func (s *UserService) List(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
 
-	users, err := s.repo.List(ctx)
+	format, err := helper.Negotiate(c, helper.FormatJSON, helper.FormatCSV)
+	if err != nil {
+		return err
+	}
+
+	q, err := helper.ParseCursorQuery(c)
+	if err != nil {
+		return err
+	}
+
+	rows, err := s.repo.FindAfterCursor(ctx, q)
 	if err != nil {
 		return helper.Internal(err)
 	}
 
-	return helper.Success(
-		c,
-		fiber.StatusOK,
-		"berhasil mengambil daftar user",
-		users,
-	)
+	hasMore := len(rows) > q.Limit
+	if hasMore {
+		rows = rows[:q.Limit]
+	}
+	meta := &model.CursorMeta{Limit: q.Limit, HasMore: hasMore}
+	if hasMore && len(rows) > 0 {
+		last := rows[len(rows)-1]
+		meta.NextCursor = helper.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	if format == helper.FormatCSV {
+		return helper.WriteUsersCSV(c, rows)
+	}
+	return helper.SuccessCursor(c, "daftar user berhasil diambil", rows, meta)
 }
 
 // ---------- FIND USER BY ID ----------
@@ -62,12 +80,10 @@ func (s *UserService) Create(c *fiber.Ctx) error {
 	defer cancel()
 
 	var req model.CreateUserRequest
-
 	if err := c.BodyParser(&req); err != nil {
 		return helper.BadRequest("body harus berupa JSON yang valid")
 	}
-
-	if errs := ValidateCreate(req); len(errs) > 0 {
+	if errs := helper.ValidateStruct(req); errs != nil {
 		return helper.Validation(errs)
 	}
 
@@ -75,24 +91,18 @@ func (s *UserService) Create(c *fiber.Ctx) error {
 		Username: req.Username,
 		Email:    req.Email,
 		Password: req.Password,
-		Role:     "user",
+		Role:     req.Role,
 		IsActive: true,
 	}
-
 	user, err := s.repo.Create(ctx, u)
 	if err != nil {
-		return translateError(
-			err,
-			"gagal membuat user",
-		)
+		return translateError(err, "gagal membuat user")
 	}
+	return helper.Success(c, fiber.StatusCreated, "user berhasil dibuat", user)
+}
 
-	return helper.Success(
-		c,
-		fiber.StatusCreated,
-		"user berhasil dibuat",
-		user,
-	)
+func ValidateCreate(req model.CreateUserRequest) any {
+	panic("unimplemented")
 }
 
 // ---------- REPLACE USER ----------
@@ -107,17 +117,13 @@ func (s *UserService) Replace(c *fiber.Ctx) error {
 	}
 
 	var req model.ReplaceUserRequest
-
 	if err := c.BodyParser(&req); err != nil {
 		return helper.BadRequest("body harus berupa JSON yang valid")
 	}
-
-	u := model.User{
-		ID:       id,
-		Username: req.Username,
-		Email:    req.Email,
-		Password: req.Password,
+	if errs := helper.ValidateStruct(req); errs != nil {
+		return helper.Validation(errs)
 	}
+	u := model.User{ID: id, Username: req.Username, Email: req.Email, Password: req.Password, Role: req.Role}
 
 	user, err := s.repo.Update(ctx, id, u)
 	if err != nil {
@@ -157,10 +163,7 @@ func (s *UserService) Patch(c *fiber.Ctx) error {
 		return translateError(err, "gagal mengambil data user")
 	}
 
-	updated, errs := ApplyPatch(current, req)
-	if len(errs) > 0 {
-		return helper.Validation(errs)
-	}
+	updated := ApplyPatch(current, req)
 
 	user, err := s.repo.Update(ctx, id, updated)
 	if err != nil {

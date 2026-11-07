@@ -15,9 +15,6 @@ func ApplyPatch(current model.User, req model.PatchUserRequest) model.User {
 	if req.Email != nil {
 		current.Email = strings.TrimSpace(*req.Email)
 	}
-	if req.IsActive != nil {
-		current.IsActive = *req.IsActive
-	}
 	return current
 }
 
@@ -27,5 +24,5 @@ func ApplyPatch(current model.User, req model.PatchUserRequest) model.User {
 // pada satu waktu, sedangkan aturan ini berbicara tentang HUBUNGAN antar
 // field — setidaknya satu di antara mereka harus ada.
 func IsEmptyPatch(req model.PatchUserRequest) bool {
-	return req.Username == nil && req.Email == nil && req.IsActive == nil
+	return req.Username == nil && req.Email == nil
 }
