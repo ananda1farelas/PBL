@@ -32,7 +32,7 @@ func main() {
 	authService := service.NewAuthService(userRepo, tokenRepo, jwtManager, cfg.RefreshTTL)
 	authHandler := handler.NewAuthHandler(authService)
 
-	app := config.NewApp(studentService, authHandler, jwtManager)
+	app := config.NewApp(studentService, authHandler, jwtManager, cfg.AllowedOrigins)
 
 	addr := fmt.Sprintf(":%s", cfg.AppPort)
 	log.Printf("Server berjalan di port %s", addr)

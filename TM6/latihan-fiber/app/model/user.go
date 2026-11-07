@@ -32,3 +32,7 @@ type PatchUserRequest struct {
 	Password *string `json:"password,omitempty"`
 	Role     *string `json:"role,omitempty"`
 }
+
+type AssignRoleRequest struct {
+	Role string `json:"role"`
+}

@@ -2,58 +2,59 @@ package config
 
 import (
 	"log/slog"
-	"os"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	"latihan-fiber/app/handler"
-	"latihan-fiber/app/repository"
-	"latihan-fiber/app/service"
 	"latihan-fiber/helper"
+	"latihan-fiber/middleware"
 	"latihan-fiber/route"
 )
 
-func NewApp(pool *pgxpool.Pool) *fiber.App {
+// NewApp merakit aplikasi: membuat instance Fiber, memasang middleware,
+// lalu mendaftarkan route. File ini adalah tempat seluruh bagian bertemu.
+func NewApp(
+	logger *slog.Logger,
+	deps route.Dependencies,
+) *fiber.App {
 	app := fiber.New(fiber.Config{
-		ErrorHandler: customErrorHandler,
+		AppName: GetEnv(
+			"APP_NAME",
+			"Praktikum Backend Lanjut",
+		),
+		ErrorHandler: newErrorHandler(logger),
+		BodyLimit:    1 * 1024 * 1024,
 	})
 
-	// Configuration / Environment Variables
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "super-secret-key-change-in-production"
-	}
+	middleware.Register(app, logger)
 
-	accessTTL := 15 * time.Minute
-	refreshTTL := 7 * 24 * time.Hour
+	route.Register(app, deps)
 
-	// 1. Inisialisasi Helper & Repository
-	jwtManager := helper.NewJWTManager(jwtSecret, "latihan-fiber", accessTTL)
-	userRepo := repository.NewUserRepository(pool)
-	tokenRepo := repository.NewTokenRepository(pool)
-
-	// 2. Inisialisasi Service
-	userService := service.NewUserService(userRepo)
-	authService := service.NewAuthService(userRepo, tokenRepo, jwtManager, refreshTTL)
-
-	// 3. Inisialisasi Handler
-	userHandler := handler.NewUserHandler(userService)
-	authHandler := handler.NewAuthHandler(authService)
-
-	// 4. Registrasi Route (oper dependency lengkap)
-	route.Register(app, pool, userHandler, authHandler, jwtManager)
+	app.Use(func(c *fiber.Ctx) error {
+		return helper.Fail(
+			c,
+			fiber.StatusNotFound,
+			"endpoint tidak ditemukan",
+		)
+	})
 
 	return app
 }
 
-func customErrorHandler(c *fiber.Ctx, err error) error {
-	code := fiber.StatusInternalServerError
-	if e, ok := err.(*fiber.Error); ok {
-		code = e.Code
+// newErrorHandler adalah jaring pengaman terakhir: error yang tidak
+// tertangani di service berakhir di sini dengan format yang tetap konsisten.
+func newErrorHandler(logger *slog.Logger) fiber.ErrorHandler {
+	return func(c *fiber.Ctx, err error) error {
+		status := fiber.StatusInternalServerError
+		message := "terjadi error pada server"
+		if e, ok := err.(*fiber.Error); ok {
+			status = e.Code
+			message = e.Message
+		}
+		logger.Error("unhandled_error",
+			slog.String("path", c.Path()),
+			slog.Int("status", status),
+			slog.String("error", err.Error()),
+		)
+		return helper.Fail(c, status, message)
 	}
-
-	slog.Error("global error handler", "status", code, "error", err.Error())
-	return helper.Fail(c, code, err.Error())
 }

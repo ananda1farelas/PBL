@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 
 	"api-students/app/handler"
 	"api-students/app/service"
@@ -9,7 +10,7 @@ import (
 	"api-students/route"
 )
 
-func NewApp(studentService *service.StudentService, authHandler *handler.AuthHandler, jwtManager *helper.JWTManager) *fiber.App {
+func NewApp(studentService *service.StudentService, authHandler *handler.AuthHandler, jwtManager *helper.JWTManager, allowedOrigins string) *fiber.App {
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
@@ -23,6 +24,9 @@ func NewApp(studentService *service.StudentService, authHandler *handler.AuthHan
 		},
 	})
 
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: allowedOrigins,
+	}))
 	app.Use(LoggerMiddleware())
 
 	route.RegisterRoutes(app, studentService, authHandler, jwtManager)

@@ -7,52 +7,145 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"latihan-fiber/app/handler"
+	"latihan-fiber/app/service"
 	"latihan-fiber/helper"
 	"latihan-fiber/middleware"
 )
 
-func Register(
-	app *fiber.App,
-	pool *pgxpool.Pool,
-	userHandler *handler.UserHandler,
-	authHandler *handler.AuthHandler,
-	jwtManager *helper.JWTManager,
-) {
+type Dependencies struct {
+	Pool        *pgxpool.Pool
+	JWT         *helper.JWTManager
+	Permissions *helper.PermissionSet
+	UserService *service.UserService
+	AuthService service.AuthService
+}
+
+func Register(app *fiber.App, deps Dependencies) {
 	api := app.Group("/api/v1")
 
-	// Health Check Route
-	api.Get("/health", healthCheck(pool))
+	// =========================================================
+	// PUBLIC
+	// =========================================================
 
-	// Auth Routes (Public)
-	auth := api.Group("/auth", middleware.RequireJSON)
-	auth.Post("/register", authHandler.Register)
-	auth.Post("/login", authHandler.Login)
-	auth.Post("/refresh", authHandler.Refresh)
-	auth.Post("/logout", authHandler.Logout)
+	// Health check
+	api.Get("/health", healthCheck(deps.Pool))
 
-	// Protected Routes (Butuh JWT Token)
-	protected := api.Group("", middleware.RequireAuth(jwtManager))
+	// =========================================================
+	// AUTHENTICATION
+	// =========================================================
 
-	// User Management Routes (Protected)
-	users := protected.Group("/users", middleware.RequireJSON)
-	users.Get("/", userHandler.List)
-	users.Get("/:id", userHandler.Get)
-	users.Post("/", userHandler.Create)
-	users.Put("/:id", userHandler.Replace)
-	users.Patch("/:id", userHandler.Patch)
-	users.Delete("/:id", userHandler.Delete)
+	auth := api.Group(
+		"/auth",
+		middleware.RequireJSON,
+	)
+
+	// Register
+	auth.Post(
+		"/register",
+		deps.AuthService.Register,
+	)
+	auth.Post(
+		"/login",
+		middleware.LoginRateLimiter(),
+		deps.AuthService.Login,
+	)
+	auth.Post(
+		"/refresh",
+		deps.AuthService.Refresh,
+	)
+	auth.Post(
+		"/logout",
+		deps.AuthService.Logout,
+	)
+	auth.Get(
+		"/me",
+		middleware.RequireAuth(deps.JWT),
+		deps.AuthService.Me,
+	)
+
+	users := api.Group(
+		"/users",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT),
+	)
+
+	perms := deps.Permissions
+
+	users.Get(
+		"/",
+		middleware.RequirePermission(
+			perms,
+			"user:list",
+		),
+		deps.UserService.List,
+	)
+
+	users.Post(
+		"/",
+		middleware.RequirePermission(
+			perms,
+			"user:update:any",
+		),
+		deps.UserService.Create,
+	)
+
+	users.Delete(
+		"/:id",
+		middleware.RequirePermission(
+			perms,
+			"user:delete",
+		),
+		deps.UserService.Delete,
+	)
+
+	users.Patch(
+		"/:id/role",
+		middleware.RequirePermission(
+			perms,
+			"role:assign",
+		),
+		deps.UserService.AssignRole,
+	)
+
+	users.Get(
+		"/:id",
+		deps.UserService.Get,
+	)
+
+	// PUT /api/v1/users/:id
+	users.Put(
+		"/:id",
+		deps.UserService.Replace,
+	)
+
+	// PATCH /api/v1/users/:id
+	users.Patch(
+		"/:id",
+		deps.UserService.Patch,
+	)
 }
 
 func healthCheck(pool *pgxpool.Pool) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(
+			c.UserContext(),
+			2*time.Second,
+		)
 		defer cancel()
 
 		if err := pool.Ping(ctx); err != nil {
-			return helper.Fail(c, fiber.StatusServiceUnavailable, "database tidak dapat dihubungi")
+			return helper.Fail(
+				c,
+				fiber.StatusServiceUnavailable,
+				"database tidak dapat dihubungi",
+			)
 		}
 
-		return helper.Success(c, fiber.StatusOK, "server dan database berjalan", nil)
+		return helper.Success(
+			c,
+			fiber.StatusOK,
+			"server dan database berjalan",
+			nil,
+		)
 	}
 }
