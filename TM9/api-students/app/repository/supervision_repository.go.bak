@@ -1,0 +1,164 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"api-students/app/model"
+	"github.com/jackc/pgx/v5"
+)
+
+var (
+	ErrStudentNotFound    = errors.New("mahasiswa tidak ditemukan")
+	ErrSupervisorNotFound = errors.New("dosen pembimbing tidak ditemukan")
+	ErrAlreadyAssigned    = errors.New("mahasiswa sudah memiliki dosen pembimbing")
+	ErrNotAssigned        = errors.New("mahasiswa belum memiliki dosen pembimbing")
+	ErrQuotaFull          = errors.New("kuota dosen pembimbing penuh")
+	ErrVersionConflict    = errors.New("data dosen telah berubah, silakan muat ulang")
+	ErrSameSupervisor     = errors.New("dosen pembimbing baru sama dengan dosen saat ini")
+)
+
+type SupervisorRepository interface {
+	WithTx(DBTX) SupervisorRepository
+	FindByIDForUpdate(context.Context, int) (model.Supervisor, error)
+	FindPairForUpdate(context.Context, int, int) (map[int]model.Supervisor, error)
+	IncreaseCount(context.Context, int) error
+	DecreaseCount(context.Context, int) error
+	UpdateOptimistic(context.Context, int, model.UpdateSupervisorQuotaRequest) (model.Supervisor, error)
+}
+
+type supervisorRepository struct{ db DBTX }
+
+func NewSupervisorRepository(db DBTX) SupervisorRepository { return &supervisorRepository{db: db} }
+func (r *supervisorRepository) WithTx(tx DBTX) SupervisorRepository {
+	return &supervisorRepository{db: tx}
+}
+
+func scanSupervisor(row pgx.Row) (model.Supervisor, error) {
+	var s model.Supervisor
+	err := row.Scan(&s.ID, &s.Name, &s.Quota, &s.SupervisedCount, &s.Version)
+	return s, err
+}
+func (r *supervisorRepository) FindByIDForUpdate(ctx context.Context, id int) (model.Supervisor, error) {
+	s, err := scanSupervisor(r.db.QueryRow(ctx, `SELECT id,name,quota,supervised_count,version FROM supervisors WHERE id=$1 FOR UPDATE`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return s, ErrSupervisorNotFound
+	}
+	return s, err
+}
+
+// Lock dua supervisor selalu berdasarkan ID menaik agar transaksi switch tidak saling deadlock.
+func (r *supervisorRepository) FindPairForUpdate(ctx context.Context, first, second int) (map[int]model.Supervisor, error) {
+	ids := []int{first, second}
+	if ids[0] > ids[1] {
+		ids[0], ids[1] = ids[1], ids[0]
+	}
+	rows, err := r.db.Query(ctx, `SELECT id,name,quota,supervised_count,version FROM supervisors WHERE id=$1 OR id=$2 ORDER BY id FOR UPDATE`, ids[0], ids[1])
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[int]model.Supervisor, 2)
+	for rows.Next() {
+		var s model.Supervisor
+		if err := rows.Scan(&s.ID, &s.Name, &s.Quota, &s.SupervisedCount, &s.Version); err != nil {
+			return nil, err
+		}
+		result[s.ID] = s
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result) != 2 {
+		return nil, ErrSupervisorNotFound
+	}
+	return result, nil
+}
+func (r *supervisorRepository) IncreaseCount(ctx context.Context, id int) error {
+	ct, err := r.db.Exec(ctx, `UPDATE supervisors SET supervised_count=supervised_count+1, version=version+1 WHERE id=$1 AND supervised_count < quota`, id)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrQuotaFull
+	}
+	return nil
+}
+func (r *supervisorRepository) DecreaseCount(ctx context.Context, id int) error {
+	ct, err := r.db.Exec(ctx, `UPDATE supervisors SET supervised_count=GREATEST(supervised_count-1,0), version=version+1 WHERE id=$1`, id)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrSupervisorNotFound
+	}
+	return nil
+}
+func (r *supervisorRepository) UpdateOptimistic(ctx context.Context, id int, req model.UpdateSupervisorQuotaRequest) (model.Supervisor, error) {
+	name := ""
+	if req.Name != nil {
+		name = *req.Name
+	}
+	quota := -1
+	if req.Quota != nil {
+		quota = *req.Quota
+	}
+	query := `UPDATE supervisors SET name=CASE WHEN $1='' THEN name ELSE $1 END, quota=CASE WHEN $2=-1 THEN quota ELSE $2 END, version=version+1 WHERE id=$3 AND version=$4 AND ($2=-1 OR $2 >= supervised_count) RETURNING id,name,quota,supervised_count,version`
+	s, err := scanSupervisor(r.db.QueryRow(ctx, query, name, quota, id, req.ExpectedVersion))
+	if errors.Is(err, pgx.ErrNoRows) {
+		var exists bool
+		if e := r.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM supervisors WHERE id=$1)`, id).Scan(&exists); e != nil {
+			return s, e
+		}
+		if !exists {
+			return s, ErrSupervisorNotFound
+		}
+		return s, ErrVersionConflict
+	}
+	return s, err
+}
+
+type SupervisionRepository interface {
+	WithTx(DBTX) SupervisionRepository
+	LockStudent(context.Context, int) error
+	FindSupervisorIDByStudent(context.Context, int) (int, error)
+	Assign(context.Context, int, int) error
+	Switch(context.Context, int, int, int) error
+}
+type supervisionRepository struct{ db DBTX }
+
+func NewSupervisionRepository(db DBTX) SupervisionRepository { return &supervisionRepository{db: db} }
+func (r *supervisionRepository) WithTx(tx DBTX) SupervisionRepository {
+	return &supervisionRepository{db: tx}
+}
+func (r *supervisionRepository) LockStudent(ctx context.Context, id int) error {
+	var found int
+	err := r.db.QueryRow(ctx, `SELECT id FROM students WHERE id=$1 FOR UPDATE`, id).Scan(&found)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrStudentNotFound
+	}
+	return err
+}
+func (r *supervisionRepository) FindSupervisorIDByStudent(ctx context.Context, id int) (int, error) {
+	var supervisorID int
+	err := r.db.QueryRow(ctx, `SELECT supervisor_id FROM supervisions WHERE student_id=$1`, id).Scan(&supervisorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotAssigned
+	}
+	return supervisorID, err
+}
+func (r *supervisionRepository) Assign(ctx context.Context, studentID, supervisorID int) error {
+	_, err := r.db.Exec(ctx, `INSERT INTO supervisions(student_id,supervisor_id) VALUES($1,$2)`, studentID, supervisorID)
+	return err
+}
+func (r *supervisionRepository) Switch(ctx context.Context, studentID, newSupervisorID, oldSupervisorID int) error {
+	ct, err := r.db.Exec(ctx, `UPDATE supervisions SET supervisor_id=$1 WHERE student_id=$2 AND supervisor_id=$3`, newSupervisorID, studentID, oldSupervisorID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("%w", ErrNotAssigned)
+	}
+	return nil
+}
